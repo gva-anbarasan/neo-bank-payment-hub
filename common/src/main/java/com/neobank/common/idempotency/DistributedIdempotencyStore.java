@@ -8,12 +8,16 @@ public class DistributedIdempotencyStore {
     private final JedisPool jedisPool;
 
     public DistributedIdempotencyStore(String redisUrl) {
-        this.jedisPool = new JedisPool(redisUrl);
+        // Fix: Add redis:// protocol if not present
+        String fixedUrl = redisUrl;
+        if (!redisUrl.startsWith("redis://") && !redisUrl.startsWith("rediss://")) {
+            fixedUrl = "redis://" + redisUrl;
+        }
+        this.jedisPool = new JedisPool(fixedUrl);
     }
 
     public boolean tryAcquire(String key, long ttlSeconds) {
         try (Jedis jedis = jedisPool.getResource()) {
-            // Option 2: Using setex with conditional check (works with all versions)
             String existingValue = jedis.get(key);
             if (existingValue == null) {
                 String newValue = UUID.randomUUID().toString();

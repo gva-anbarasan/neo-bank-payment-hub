@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Test for Neo-Bank</h1>
+    <button onclick="connect()">Connect</button>
+    <button onclick="disconnect()">Disconnect</button>
+    <div id="messages"></div>
+    <script>
+        let ws = null;
+        
+        function connect() {
+            ws = new WebSocket('ws://localhost:8086/ws');
+            ws.onopen = function() {
+                document.getElementById('messages').innerHTML += '<p>‚úÖ Connected to WebSocket</p>';
+            };
+            ws.onmessage = function(event) {
+                document.getElementById('messages').innerHTML += '<p>Ì≥ä Received: ' + event.data + '</p>';
+            };
+            ws.onerror = function(error) {
+                document.getElementById('messages').innerHTML += '<p>‚ùå Error: ' + error + '</p>';
+            };
+            ws.onclose = function() {
+                document.getElementById('messages').innerHTML += '<p>Ì¥å Disconnected</p>';
+            };
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+    </script>
+</body>
+</html>

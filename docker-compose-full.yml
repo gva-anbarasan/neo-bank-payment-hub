@@ -1,0 +1,174 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: neo-bank-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: neobank
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    networks:
+      - neo-bank-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: neo-bank-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - neo-bank-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: neo-bank-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - neo-bank-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: neo-bank-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - neo-bank-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: neo-bank-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://neo-bank-kafka:9092,PLAINTEXT://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    networks:
+      - neo-bank-network
+    depends_on:
+      - zookeeper
+
+  auth-service:
+    image: neo-bank-payment-hub-auth-service:latest
+    container_name: neo-bank-auth-service
+    ports:
+      - "8085:8085"
+    environment:
+      spring.kafka.bootstrap-servers: neo-bank-kafka:9092
+    networks:
+      - neo-bank-network
+    depends_on:
+      - kafka
+      - postgres
+      - redis
+
+  api-gateway:
+    image: neo-bank-payment-hub-api-gateway:latest
+    container_name: neo-bank-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      spring.kafka.bootstrap-servers: neo-bank-kafka:9092
+    networks:
+      - neo-bank-network
+    depends_on:
+      - auth-service
+
+  order-service:
+    image: neo-bank-payment-hub-order-service:latest
+    container_name: neo-bank-order-service
+    ports:
+      - "8081:8081"
+    environment:
+      spring.kafka.bootstrap-servers: neo-bank-kafka:9092
+    networks:
+      - neo-bank-network
+    depends_on:
+      - kafka
+      - postgres
+
+  payment-orchestrator:
+    image: neo-bank-payment-hub-payment-orchestrator:latest
+    container_name: neo-bank-payment-orchestrator
+    ports:
+      - "8082:8082"
+    environment:
+      spring.kafka.bootstrap-servers: neo-bank-kafka:9092
+    networks:
+      - neo-bank-network
+    depends_on:
+      - kafka
+      - postgres
+
+  fraud-engine:
+    image: neo-bank-payment-hub-fraud-engine:latest
+    container_name: neo-bank-fraud-engine
+    ports:
+      - "8083:8083"
+    environment:
+      spring.kafka.bootstrap-servers: neo-bank-kafka:9092
+    networks:
+      - neo-bank-network
+    depends_on:
+      - kafka
+      - redis
+
+  ledger-worker:
+    image: neo-bank-payment-hub-ledger-worker:latest
+    container_name: neo-bank-ledger-worker
+    ports:
+      - "8084:8084"
+    environment:
+      spring.kafka.bootstrap-servers: neo-bank-kafka:9092
+    networks:
+      - neo-bank-network
+    depends_on:
+      - kafka
+      - postgres
+
+  ui-backend:
+    image: neo-bank-payment-hub-ui-backend:latest
+    container_name: neo-bank-ui-backend
+    ports:
+      - "8086:8086"
+    environment:
+      spring.kafka.bootstrap-servers: neo-bank-kafka:9092
+    networks:
+      - neo-bank-network
+    depends_on:
+      - kafka
+      - redis
+
+  ui:
+    image: neo-bank-payment-hub-ui:latest
+    container_name: neo-bank-ui
+    ports:
+      - "3000:80"
+    networks:
+      - neo-bank-network
+    depends_on:
+      - api-gateway
+      - ui-backend
+
+networks:
+  neo-bank-network:
+    driver: bridge

@@ -16,7 +16,8 @@ public class RedisConfig {
 
     @Bean
     public DistributedIdempotencyStore distributedIdempotencyStore() {
-        String redisUrl = String.format("%s:%d", redisHost, redisPort);
+        // Fix: Add redis:// protocol prefix
+        String redisUrl = String.format("redis://%s:%d", redisHost, redisPort);
         return new DistributedIdempotencyStore(redisUrl);
     }
 }

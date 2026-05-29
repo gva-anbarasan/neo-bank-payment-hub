@@ -1,8 +1,10 @@
 package com.neobank.order.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.Data;
-import java.math.BigDecimal;  // ← ADD THIS IMPORT
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -10,11 +12,9 @@ import java.time.LocalDateTime;
 @Data
 public class Order {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
-
     private String userId;
-    private BigDecimal amount;  // Now works with import
+    private BigDecimal amount;
     private String currency;
     private String status;
     private LocalDateTime createdAt;
