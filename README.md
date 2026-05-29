@@ -1,178 +1,25 @@
 # NEO-BANK Payment Hub
 
-A complete, production-ready distributed payment processing system. This project demonstrates a microservices architecture implementing key patterns like Saga, 
-Outbox, and Idempotency, with real-time dashboards and event streaming.
+A production-ready distributed payment processing system with real-time dashboard, fraud detection, and idempotent transactions.
 
-
-
-## 📋 Coding Test Requirements - All 20 Questions Covered
-
-| Section | Q# | Requirement | Implementation Location |
-|:-------:|:--:|:------------|:------------------------|
-| **1** | Q1 | Thread-safe in-memory idempotency store | `common/src/main/java/.../idempotency/DistributedIdempotencyStore.java` |
-| | Q2 | Prevent double-processing in distributed service | `payment-orchestrator/.../saga/PaymentSagaOrchestrator.java` (idempotency check) |
-| | Q3 | Retry + exponential backoff utility | `common/src/main/java/.../retry/RetryUtils.java` |
-| | Q4 | Pluggable rule evaluators abstraction | `fraud-engine/.../engine/DynamicFraudRulesEngine.java` (Rule interface) |
-
-| **2** | Q5 | Payment workflow using Saga | `payment-orchestrator/.../saga/PaymentSagaOrchestrator.java` |
-| | Q6 | REST vs Kafka trade-offs | `README.md` (this section) + Architecture design |
-| | Q7 | Outbox pattern publisher | `order-service/.../service/OrderService.java` (Outbox polling) |
-| | Q8 | Resilient API Gateway fallback | `api-gateway/.../controller/PaymentController.java` (fallback handling) |
-
-| **3** | Q9 | Kafka consumer groups scaling & ordering | `ledger-worker/.../config/KafkaConsumerConfig.java` |
-| | Q10 | Spring Kafka consumer with manual ack | `ledger-worker/.../consumer/PaymentConsumer.java` |
-| | Q11 | Auto-commit risks explanation | See `docs/KAFKA_DESIGN.md` |
-| | Q12 | Batch processing + commit after success | `ledger-worker/.../consumer/PaymentConsumer.java` (batch listener) |
-| | Q13 | CommitFailedException causes & fix | `ledger-worker/.../config/KafkaConsumerConfig.java` (max.poll.interval.ms) |
-| | Q14 | Retry + DLQ strategy | `ledger-worker/.../consumer/PaymentConsumer.java` (@RetryableTopic + @DltHandler) |
-| | Q15 | Preserve ordering while scaling | Partition by key + consistent hashing strategy |
-
-| **4** | Q16 | Generic MQ consumer contract | `common/src/main/java/.../mq/MessageConsumerContract.java` |
-| | Q17 | Prevent slow consumer blocking | Thread pools + bounded queues with backpressure |
-
-
-| **5** | Q18 | Dynamic rules library for access decisions | `fraud-engine/.../engine/DynamicFraudRulesEngine.java` |
-| | Q19 | Risks of storing rules in database | See `docs/RULES_ENGINE_DESIGN.md` (caching, security, performance) |
-
-| **6** | Q20 | Policy-based dynamic access control | `auth-service/.../access/DynamicAccessController.java` |
-
-## 🚀 Quick Start
-
-### Prerequisites
-- **Java 17** ([Download](https://adoptium.net/))
-- **Maven** ([Download](https://maven.apache.org/download.cgi))
-- **Docker Desktop** ([Download](https://www.docker.com/products/docker-desktop/))
-
-### Installation & Setup
+## 🚀 One-Command Setup
 
 ```bash
-# 1. Clone the repository
+# Clone and run everything
 git clone https://github.com/gva-anbarasan/neo-bank-payment-hub.git
 cd neo-bank-payment-hub
-
-# 2. Build all JAR files (this compiles all microservices)
 mvn clean package -DskipTests
-
-# 3. Start all services with Docker (13 containers total)
 docker-compose up -d --build
-
-# 4. Access the application
-#    React Dashboard: http://localhost:3000
-#    API Gateway: http://localhost:8080
-
-
 ***********************************
+That's it! Access: http://localhost:3000
 
-Architecture Overview:
-Client Request → API Gateway (Fallback/Circuit Breaker)
-                      ↓
-              Order Service (Outbox Pattern)
-                      ↓
-              Kafka Topics (ORDER_CREATED, PAYMENT_SUCCESS, PAYMENT_FAILED)
-                      ↓
-         ┌───────────┼───────────┐
-         ↓           ↓           ↓
-  Payment Saga  Fraud Engine  Ledger Worker
-  (Orchestrator) (Rules)      (Consumer + DLQ)
-         ↓           ↓           ↓
-    Wallet/Fraud  Redis Cache  PostgreSQL
-	
-
-
-**********************************
-
-
-🔌 Services & Ports
-Service	      			Port	Description									 Related Q#
-React UI	  			3000	Real-time transaction dashboard				    UI
-API Gateway	  			8080	Entry point with fallback/circuit breaker	    Q8
-Order Service			8081	Outbox pattern for reliable events		   		Q7
-Payment Orchestrator	8082	Saga coordinator with idempotency				Q2, Q5
-Fraud Engine			8083	Dynamic rules engine	                    	Q4, Q18
-Ledger Worker			8084	Kafka consumer with manual commit + DLQ	    	Q10, Q12, Q14
-Auth Service			8085	Policy-based access control (ABAC)	        	Q20
-UI Backend				8086	WebSocket server for real-time stats	
-
-
-
-🧪 Testing the System
-1. Create a successful payment
-bash
-curl -X POST http://localhost:8080/api/payments \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: test-001" \
-  -d '{"userId":"user123","amount":100,"currency":"USD"}'
-
-
-2. Test Idempotency (Q2) - Same key returns "ALREADY_PROCESSED"
-bash
-curl -X POST http://localhost:8080/api/payments \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: test-001" \
-  -d '{"userId":"user123","amount":100,"currency":"USD"}'
-
-
-3. Test Fraud Detection (Q18) - Amount > $10,000
-bash
-curl -X POST http://localhost:8080/api/payments \
-  -H "Content-Type: application/json" \
-  -d '{"userId":"suspicious","amount":50000,"currency":"USD"}'
-
-
-4. Check Real-time Stats (WebSocket - Q10/Q12)
-bash
-curl http://localhost:8086/api/stats
-
-
-
-📁 Project Structure
-text
-neo-bank-payment-hub/
-├── api-gateway/             # Q8: Fallback + circuit breaker
-├── auth-service/            # Q20: Policy-based ABAC
-├── common/                  # Q1, Q3, Q4, Q16: Idempotency, Retry, Rules, MQ Contract
-├── fraud-engine/            # Q4, Q18, Q19: Dynamic rules engine
-├── ledger-worker/           # Q9-Q15: Kafka consumer, manual commit, DLQ
-├── order-service/           # Q7: Outbox pattern
-├── payment-orchestrator/    # Q2, Q5: Saga + idempotency
-├── services/ui-backend/     # WebSocket server for real-time stats
-├── ui/                      # React dashboard
-├── scripts/                 # Helper scripts (create topics, init DB)
-├── docker-compose.yml       # Complete deployment (13 containers)
-└── pom.xml                  # Parent Maven configuration
-
-
-
-🔧 REST vs Kafka Trade-offs (Q6)
-Aspect	Synchronous REST	Asynchronous Kafka
-Latency	Low (immediate response)	Higher (eventual consistency)
-Coupling	Tight (client knows service)	Loose (decoupled via events)
-Ordering	Not guaranteed	Guaranteed per partition
-Backpressure	Hard to implement	Built-in (consumer lag)
-Transaction	Difficult across services	Outbox pattern + idempotency
-Use Case	Real-time queries	Event-driven workflows
-
-
-🛠 Troubleshooting
-Docker Build Fails (lstat /target: no such file or directory)
-Fix: Run mvn clean package -DskipTests before docker-compose up -d --build
-
-Kafka Cluster ID Mismatch (Q13)
-Fix: Reset volumes and restart
-
-
-
-
-bash
-docker-compose down -v && docker-compose up -d
-
-
-CommitFailedException (Q13)
-Fix: Increase max.poll.interval.ms in KafkaConsumerConfig.java
-
-Port Already in Use
-Fix: Change exposed ports in docker-compose.yml
-
+************************************
+📋 Pre-Setup Requirements
+Tool	Version	Check Command
+Java	17+	java -version
+Maven	3.8+	mvn -version
+Docker	20.10+	docker --version
+Git	Latest	git --version
 
 ***************************************************
 ## Kafka Topics
@@ -207,6 +54,148 @@ docker exec -it neo-bank-kafka kafka-topics --create \
 docker exec -it neo-bank-kafka kafka-topics --bootstrap-server localhost:9092 --list
 
 *******************************
+
+***************************
+🎯 Quick Test (Copy-Paste)
+# 1. Check all services
+docker ps --format "table {{.Names}}\t{{.Status}}"
+
+# 2. Create a payment
+curl -X POST http://localhost:8080/api/payments \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: test-001" \
+  -d '{"userId":"user1","amount":100,"currency":"USD"}'
+
+# 3. Test idempotency (same payment - gets rejected)
+curl -X POST http://localhost:8080/api/payments \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: test-001" \
+  -d '{"userId":"user1","amount":100,"currency":"USD"}'
+
+# 4. Test fraud detection ($50,000 triggers fraud)
+curl -X POST http://localhost:8080/api/payments \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"suspicious","amount":50000,"currency":"USD"}'
+
+# 5. View real-time stats
+curl http://localhost:8086/api/stats
+
+***********************************
+📊 Services & Ports
+Service	Port	What it does
+Dashboard UI	3000	Real-time transaction monitor
+API Gateway	8080	Entry point (use this for all API calls)
+Order Service	8081	Creates orders with Outbox pattern
+Payment Orchestrator	8082	Saga coordinator + idempotency
+Fraud Engine	8083	Dynamic fraud detection rules
+Ledger Worker	8084	Kafka consumer with DLQ
+Auth Service	8085	Policy-based access control
+UI Backend	8086	WebSocket stats server
+*************************************
+
+
+## 📋 Coding Test Requirements - All 20 Questions Covered
+
+| Section | Q# | Requirement | Implementation Location |
+|:-------:|:--:|:------------|:------------------------|
+| **1** | Q1 | Thread-safe in-memory idempotency store | `common/src/main/java/.../idempotency/DistributedIdempotencyStore.java` |
+| | Q2 | Prevent double-processing in distributed service | `payment-orchestrator/.../saga/PaymentSagaOrchestrator.java` (idempotency check) |
+| | Q3 | Retry + exponential backoff utility | `common/src/main/java/.../retry/RetryUtils.java` |
+| | Q4 | Pluggable rule evaluators abstraction | `fraud-engine/.../engine/DynamicFraudRulesEngine.java` (Rule interface) |
+
+| **2** | Q5 | Payment workflow using Saga | `payment-orchestrator/.../saga/PaymentSagaOrchestrator.java` |
+| | Q6 | REST vs Kafka trade-offs | `README.md` (this section) + Architecture design |
+| | Q7 | Outbox pattern publisher | `order-service/.../service/OrderService.java` (Outbox polling) |
+| | Q8 | Resilient API Gateway fallback | `api-gateway/.../controller/PaymentController.java` (fallback handling) |
+
+| **3** | Q9 | Kafka consumer groups scaling & ordering | `ledger-worker/.../config/KafkaConsumerConfig.java` |
+| | Q10 | Spring Kafka consumer with manual ack | `ledger-worker/.../consumer/PaymentConsumer.java` |
+| | Q11 | Auto-commit risks explanation | See `docs/KAFKA_DESIGN.md` |
+| | Q12 | Batch processing + commit after success | `ledger-worker/.../consumer/PaymentConsumer.java` (batch listener) |
+| | Q13 | CommitFailedException causes & fix | `ledger-worker/.../config/KafkaConsumerConfig.java` (max.poll.interval.ms) |
+| | Q14 | Retry + DLQ strategy | `ledger-worker/.../consumer/PaymentConsumer.java` (@RetryableTopic + @DltHandler) |
+| | Q15 | Preserve ordering while scaling | Partition by key + consistent hashing strategy |
+
+| **4** | Q16 | Generic MQ consumer contract | `common/src/main/java/.../mq/MessageConsumerContract.java` |
+| | Q17 | Prevent slow consumer blocking | Thread pools + bounded queues with backpressure |
+
+
+| **5** | Q18 | Dynamic rules library for access decisions | `fraud-engine/.../engine/DynamicFraudRulesEngine.java` |
+| | Q19 | Risks of storing rules in database | See `docs/RULES_ENGINE_DESIGN.md` (caching, security, performance) |
+
+| **6** | Q20 | Policy-based dynamic access control | `auth-service/.../access/DynamicAccessController.java` |
+
+
+***********************************
+
+Architecture Overview:
+Client Request → API Gateway (Fallback/Circuit Breaker)
+                      ↓
+              Order Service (Outbox Pattern)
+                      ↓
+              Kafka Topics (ORDER_CREATED, PAYMENT_SUCCESS, PAYMENT_FAILED)
+                      ↓
+         ┌───────────┼───────────┐
+         ↓           ↓           ↓
+  Payment Saga  Fraud Engine  Ledger Worker
+  (Orchestrator) (Rules)      (Consumer + DLQ)
+         ↓           ↓           ↓
+    Wallet/Fraud  Redis Cache  PostgreSQL
+	
+
+
+**********************************
+
+
+
+
+
+📁 Project Structure
+text
+neo-bank-payment-hub/
+├── api-gateway/             # Q8: Fallback + circuit breaker
+├── auth-service/            # Q20: Policy-based ABAC
+├── common/                  # Q1, Q3, Q4, Q16: Idempotency, Retry, Rules, MQ Contract
+├── fraud-engine/            # Q4, Q18, Q19: Dynamic rules engine
+├── ledger-worker/           # Q9-Q15: Kafka consumer, manual commit, DLQ
+├── order-service/           # Q7: Outbox pattern
+├── payment-orchestrator/    # Q2, Q5: Saga + idempotency
+├── services/ui-backend/     # WebSocket server for real-time stats
+├── ui/                      # React dashboard
+├── scripts/                 # Helper scripts (create topics, init DB)
+├── docker-compose.yml       # Complete deployment (13 containers)
+└── pom.xml                  # Parent Maven configuration
+
+# All 13 containers should be running
+docker ps | wc -l  # Should show 13+
+
+# All services should respond
+curl http://localhost:8080/actuator/health
+curl http://localhost:8081/actuator/health
+curl http://localhost:8082/actuator/health
+curl http://localhost:8083/actuator/health
+curl http://localhost:8084/actuator/health
+curl http://localhost:8085/actuator/health
+curl http://localhost:8086/actuator/health
+
+**********************************************
+
+🎉 Success Criteria
+You'll know it's working when:
+
+✅ Dashboard loads at http://localhost:3000
+
+✅ All 13 Docker containers show "Up" status
+
+✅ Payment API returns success
+
+✅ Idempotency prevents duplicate payments
+
+✅ Fraud detection rejects large amounts (>$10,000)
+
+✅ WebSocket shows real-time stats
+*****************************************
+
 
 📊 Key Implementation Highlights
 Requirement	Implementation Detail
@@ -274,3 +263,9 @@ Simpler - Minimal Table
 | **4** | Q16-Q17 | `common/mq/` |
 | **5** | Q18-Q19 | `fraud-engine/` |
 | **6** | Q20 | `auth-service/` |
+
+
+📝 Author
+Anbarasan - gva.anbarasan@gmail.com
+
+GitHub: https://github.com/gva-anbarasan/neo-bank-payment-hub
