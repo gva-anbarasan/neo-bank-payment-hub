@@ -264,7 +264,19 @@ Simpler - Minimal Table
 | **5** | Q18-Q19 | `fraud-engine/` |
 | **6** | Q20 | `auth-service/` |
 
+**********************************************
+## 📊 Final :Live Dashboard
 
+![Neo-Bank Payment Hub Dashboard](docs/images/dashboard-screenshot.png)
+
+**System Metrics:**
+- ✅ All 13 services running
+- ✅ Real-time monitoring active  
+- ✅ Idempotency enabled
+- ⚡ Success Rate: 100%
+- 🔄 Ready for transaction processing
+
+***********************************************
 📝 Author
 Anbarasan - gva.anbarasan@gmail.com
 
