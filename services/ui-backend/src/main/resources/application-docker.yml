@@ -1,0 +1,41 @@
+spring:
+  # Kafka Configuration for Docker
+  kafka:
+    bootstrap-servers: kafka:9092
+    consumer:
+      group-id: ui-backend-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+  # Redis Configuration for Docker
+  redis:
+    host: redis
+    port: 6379
+    timeout: 2000ms
+
+# Server Configuration for Docker
+server:
+  port: 8080
+  address: 0.0.0.0
+
+# Logging for Docker (console only)
+logging:
+  level:
+    com.neobank: INFO
+    org.springframework.web.socket: WARN
+    org.springframework.kafka: WARN
+  pattern:
+    console: "%d{HH:mm:ss.SSS} - %msg%n"
+
+# Application Specific Configuration for Docker
+app:
+  websocket:
+    endpoint: /ws/stats
+    allowed-origins: "*"
+  stats:
+    broadcast-interval-ms: 1000
+    kafka-topics:
+      - ORDER_CREATED
+      - PAYMENT_SUCCESS
+      - PAYMENT_FAILED

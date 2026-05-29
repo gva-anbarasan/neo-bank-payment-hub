@@ -1,0 +1,261 @@
+networks:
+  neo-bank-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  kafka_data:
+  zookeeper_data:
+
+services:
+  # ============ INFRASTRUCTURE SERVICES ============
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: neo-bank-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: orderdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - neo-bank-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: neo-bank-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - neo-bank-network
+
+  # Using working Zookeeper image
+  zookeeper:
+    image: zookeeper:3.8
+    container_name: neo-bank-zookeeper
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=0.0.0.0:2888:3888;2181
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/data
+      - zookeeper_data:/datalog
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - neo-bank-network
+
+  # Using working Kafka image (Apache Kafka)
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: neo-bank-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/opt/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - neo-bank-network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: neo-bank-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - neo-bank-network
+
+
+  # ============ MICROSERVICES ============
+
+  order-service:
+    build:
+      context: ./order-service
+      dockerfile: Dockerfile
+    container_name: neo-bank-order-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orderdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    networks:
+      - neo-bank-network
+
+  payment-orchestrator:
+    build:
+      context: ./payment-orchestrator
+      dockerfile: Dockerfile
+    container_name: neo-bank-payment-orchestrator
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      REDIS_HOST: redis
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+    networks:
+      - neo-bank-network
+
+  fraud-engine:
+    build:
+      context: ./fraud-engine
+      dockerfile: Dockerfile
+    container_name: neo-bank-fraud-engine
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    networks:
+      - neo-bank-network
+
+  ledger-worker:
+    build:
+      context: ./ledger-worker
+      dockerfile: Dockerfile
+    container_name: neo-bank-ledger-worker
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orderdb
+    ports:
+      - "8084:8084"
+    restart: unless-stopped
+    networks:
+      - neo-bank-network
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: neo-bank-auth-service
+    ports:
+      - "8085:8085"
+    restart: unless-stopped
+    networks:
+      - neo-bank-network
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: neo-bank-api-gateway
+    depends_on:
+      - payment-orchestrator
+      - order-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      PAYMENT_SERVICE_URL: http://payment-orchestrator:8082
+      ORDER_SERVICE_URL: http://order-service:8081
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - neo-bank-network
+
+  ui-backend:
+    build:
+      context: ./services/ui-backend
+      dockerfile: Dockerfile
+    container_name: neo-bank-ui-backend
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      REDIS_HOST: redis
+    ports:
+      - "8086:8086"
+    restart: unless-stopped
+    networks:
+      - neo-bank-network
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: neo-bank-ui
+    depends_on:
+      - ui-backend
+      - api-gateway
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    networks:
+      - neo-bank-network
