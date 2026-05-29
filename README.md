@@ -174,6 +174,39 @@ Port Already in Use
 Fix: Change exposed ports in docker-compose.yml
 
 
+***************************************************
+## Kafka Topics
+
+The system requires the following topics to be created before running:
+
+| Topic | Partitions | Replication Factor | Description |
+|-------|------------|-------------------|-------------|
+| `ORDER_CREATED` | 3 | 1 | Emitted when a new order is created (Outbox pattern) |
+| `PAYMENT_SUCCESS` | 3 | 1 | Emitted when a payment is successfully processed |
+| `PAYMENT_FAILED` | 3 | 1 | Emitted when a payment fails (triggers DLQ) |
+
+### Create Topics (Automatically handled by docker-compose)
+
+```bash
+# Create ORDER_CREATED topic
+docker exec -it neo-bank-kafka kafka-topics --create \
+  --topic ORDER_CREATED --bootstrap-server localhost:9092 \
+  --partitions 3 --replication-factor 1
+
+# Create PAYMENT_SUCCESS topic
+docker exec -it neo-bank-kafka kafka-topics --create \
+  --topic PAYMENT_SUCCESS --bootstrap-server localhost:9092 \
+  --partitions 3 --replication-factor 1
+
+# Create PAYMENT_FAILED topic
+docker exec -it neo-bank-kafka kafka-topics --create \
+  --topic PAYMENT_FAILED --bootstrap-server localhost:9092 \
+  --partitions 3 --replication-factor 1
+
+# Verify all topics
+docker exec -it neo-bank-kafka kafka-topics --bootstrap-server localhost:9092 --list
+
+*******************************
 
 📊 Key Implementation Highlights
 Requirement	Implementation Detail
